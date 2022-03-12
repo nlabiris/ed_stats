@@ -3,15 +3,17 @@
     // Hover to view descriptions of existing attributes.
     // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
     "version": "0.2.0",
-    "configurations": [
-        {
-            "name": "Python: Current File",
-            "type": "python",
-            "request": "launch",
-            "program": "${file}",
-            "console": "integratedTerminal",
-            "args": ["--all-events"],
-            "justMyCode": true
-        }
-    ]
+    "configurations": [{
+        "name": "Python: Current File",
+        "type": "python",
+        "request": "launch",
+        "program": "${file}",
+        "console": "integratedTerminal",
+        "args": [
+            "--events", "FSDJump",
+            "--all-journals"
+            // "--journal-from", "2022-03-09"
+        ],
+        "justMyCode": true
+    }]
 }

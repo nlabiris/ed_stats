@@ -66,6 +66,10 @@ from model.Music import Music
 
 class ED:
     def __init__(self):
+        '''
+        Constructor
+        '''
+
         with open("config.json", "r") as config_file:
             config = json.load(config_file)
         self.journals_path = config.get("journals_path")
@@ -83,7 +87,12 @@ class ED:
         parser.add_argument("--all-journals", help="Parse all journal files", action="store_true")
         parser.add_argument("--events", help="Journal event types, separated by comma (,)")
         parser.add_argument("--journal-from", help="Journal timestamp from")
-        parser.add_argument("--journal-to", help="Journal timestamp to")
+        parser.add_argument("--journal-to", help="Journal timestamp to. If ommited, assume current datetime")
+        parser.add_argument("--scan-type", help="For event type 'Scan' - Scan type can be Basic, Detailed, NavBeacon, NavBeaconDetail, AutoScan")
+        parser.add_argument("--materials", help="For event type 'Scan' - Materials, separated by comma (,)")
+        parser.add_argument("--landable", help="For event type 'Scan' - If the body is landable or not", action="store_true")
+        parser.add_argument("--was-mapped", help="For event type 'Scan' - If the body was mapped", action="store_true")
+        parser.add_argument("--was-discovered", help="For event type 'Scan' - If the body was discovered", action="store_true")
 
         # Read arguments from the command line
         self.args = parser.parse_args()
@@ -94,7 +103,7 @@ class ED:
             if (self.args.events):
                 self.args.events = self.args.events.split(",")
             else:
-                raise Exception("Provide at least one journal event type using the '--events' option")
+                raise Exception("Provide at least one journal event type by using the '--events' option or use '--all-events' option")
 
         if (not self.args.all_journals):
             if (self.args.journal_from):
@@ -104,11 +113,8 @@ class ED:
 
             if (self.args.journal_to):
                 self.args.journal_to = datetime.strptime(self.args.journal_to, "%Y-%m-%d")
-            else:
-                raise Exception("Provide a 'to' timestamp to start filtering for journals using the '--journal-to' option (format: YYYY-mm-dd)")
 
         return self.args
-        #raise Exception("Invalid option, neither '--ms' nor '--csa'")
 
     def createObjectByEvent(self, line):
         e = line.get("event")
@@ -174,10 +180,10 @@ class ED:
         return None
 
     def parseJournalsData(self):
+        # TODO: Probably merge all the function in order to avoid repetitive loops
         journal_file_names = self.filerJournalsByTimestamp()
-        journals_data_lines = self.loadJournalLines(self, journal_file_names)
+        journals_data_lines = self.loadJournalLines(journal_file_names)
         self.journals = self.parseJournalLines(journals_data_lines)
-        print(len(self.journals))
 
     def filerJournalsByTimestamp(self):
         files = os.listdir(self.journals_path)
@@ -186,7 +192,11 @@ class ED:
             parts = file.split(".")
             if (parts[0] == "Journal"):
                 journal_date = datetime.strptime(parts[1][0:6], "%y%m%d")
-                if (journal_date >= self.args.journal_from and self.args.journal_to >= journal_date):
+                if (
+                    self.args.all_journals or
+                    (self.args.journal_to is None and journal_date >= self.args.journal_from) or
+                    (journal_date >= self.args.journal_from and self.args.journal_to >= journal_date)
+                ):
                     journal_file_names.append(file)
         return journal_file_names
 
@@ -197,24 +207,42 @@ class ED:
                 lines = json_file.readlines()
                 for l in lines:
                     line = json.loads(l)
-                    if (not self.args.events or line.get("event") in self.args.events):
+                    if (not self.args.events or (line.get("event") in self.args.events)):
                         journals_data_lines.append(line)
         return journals_data_lines
 
     def parseJournalLines(self, journals_data_lines):
         journals = []
         for line in journals_data_lines:
-            # 1. Create an object for each line
-            # 2. Get all lines based on event type
             obj = self.createObjectByEvent(line)
-            journals.append(obj)
+            if (obj is not None):
+                journals.append(obj)
         return journals
 
+    #region Custom methods
+
+    def loadSystemCoordinates(self):
+        coordinates = []
+        for line in self.journals:
+            if (isinstance(line, FSDJump)):
+                if (len(line.star_pos) > 0):
+                    coordinates.append(line.star_pos)
+        return {
+            "event": line.event,
+            "data": np.array(coordinates).T
+        }
+
+    #endregion
+
 class EDStats:
-    def initData(self):
-        self.x = [0, 11007.46875]
-        self.y = [0, 44.84375]
-        self.z = [0, -16899.75]
+    # TODO: initData can contain anything not just coordinates.
+    # Probably pass event type as well
+    def initData(self, eventData):
+
+
+        self.x = coordinates[0]
+        self.y = coordinates[1]
+        self.z = coordinates[2]
 
     def initialize2DPlot(self):
         self.im = plt.imread("milky_way_ed_9000px.jpg")
@@ -262,9 +290,13 @@ if __name__ == "__main__":
     ed = ED()
     ed.parseArgs()
     ed.parseJournalsData()
-    # ed.initData()
+    eventData = ed.loadSystemCoordinates()
+    stats = EDStats()
+    stats.initData(eventData)
+    # stats.initialize2DPlot()
+    # stats.scatter2DData()
     # ed.initialize3DPlot()
     # ed.scatter3DData()
-    # ed.showPlot()
+    # stats.showPlot()
 
 
