@@ -3,6 +3,7 @@ import numpy as np
 import json
 import os
 import argparse
+from typing import List
 from ast import For
 from datetime import datetime,timedelta
 from pkgutil import extend_path
@@ -10,6 +11,8 @@ from matplotlib.transforms import Bbox
 from matplotlib.cbook import get_sample_data
 from matplotlib._png import read_png
 from mpl_toolkits import mplot3d
+from helper import Helper
+from timing import Timing
 from model.ApproachBody import ApproachBody
 from model.BuyExplorationData import BuyExplorationData
 from model.Cargo import Cargo
@@ -73,6 +76,30 @@ class ED:
         with open("config.json", "r") as config_file:
             config = json.load(config_file)
         self.journals_path = config.get("journals_path")
+        self.green_system_materials = {
+            "basic": [
+                "carbon",
+                "vanadium",
+                "germanium",
+            ],
+            "standard": [
+                "carbon",
+                "vanadium",
+                "germanium",
+                "cadmium",
+                "niobium",
+            ],
+            "premium": [
+                "carbon",
+                "germanium",
+                "niobium",
+                "arsenic",
+                "yttrium",
+                "polonium",
+            ]
+        }
+
+        self.timing = Timing()
 
     def parseArgs(self):
         '''
@@ -93,6 +120,8 @@ class ED:
         parser.add_argument("--landable", help="For event type 'Scan' - If the body is landable or not", action="store_true")
         parser.add_argument("--was-mapped", help="For event type 'Scan' - If the body was mapped", action="store_true")
         parser.add_argument("--was-discovered", help="For event type 'Scan' - If the body was discovered", action="store_true")
+        parser.add_argument("--green-systems", help="For event type 'Scan' - Filter 'green' systems (systems where you can find materials for FSD injections)", action="store_true")
+        parser.add_argument("--total-earnings", help="For event types 'SellExplorationData', 'MultiSellExplorationData' - Get total earnings", action="store_true")
 
         # Read arguments from the command line
         self.args = parser.parse_args()
@@ -101,7 +130,7 @@ class ED:
             self.args.events = []
         else:
             if (self.args.events):
-                self.args.events = self.args.events.split(",")
+                self.args.events = [event.strip() for event in self.args.events.split(",")]
             else:
                 raise Exception("Provide at least one journal event type by using the '--events' option or use '--all-events' option")
 
@@ -181,9 +210,11 @@ class ED:
 
     def parseJournalsData(self):
         # TODO: Probably merge all the function in order to avoid repetitive loops
+        self.timing.startTimingExecution()
         journal_file_names = self.filerJournalsByTimestamp()
         journals_data_lines = self.loadJournalLines(journal_file_names)
         self.journals = self.parseJournalLines(journals_data_lines)
+        self.timing.stopTimingExecution()
 
     def filerJournalsByTimestamp(self):
         files = os.listdir(self.journals_path)
@@ -221,6 +252,63 @@ class ED:
 
     #region Custom methods
 
+    def loadGreenSystems(self):
+        # TODO: Create generic object in order to hold system data and details from other events
+        data = []
+        self.timing.startTimingExecution()
+        for line in self.journals:
+            if (isinstance(line, FSDJump)):
+                planets = []
+                has_basic_materials = False
+                has_standard_materials = False
+                has_premium_materials = False
+                is_green_system = False
+                # TODO: 30ms at each loop
+                scan_data = [l for l in self.journals if isinstance(l, Scan) and l.system_address == line.system_address]
+                for planet in scan_data:
+                    b = []
+                    s = []
+                    p = []
+                    if (planet.landable and len(planet.materials) > 0):
+                        b = [m.name for m in planet.materials if m.name in self.green_system_materials["basic"]]
+                        s = [m.name for m in planet.materials if m.name in self.green_system_materials["standard"]]
+                        p = [m.name for m in planet.materials if m.name in self.green_system_materials["premium"]]
+                    if not has_basic_materials:
+                        has_basic_materials = True if b else False
+                    if not has_standard_materials:
+                        has_standard_materials = True if s else False
+                    if not has_premium_materials:
+                        has_premium_materials = True if p else False
+                    is_green_system = has_basic_materials and has_standard_materials and has_premium_materials
+                    p = {
+                        "system_address": planet.system_address,
+                        "body_name": planet.body_name,
+                        "surface_gravity": planet.surface_gravity,
+                        "has_basic_materials": has_basic_materials,
+                        "has_standard_materials": has_standard_materials,
+                        "has_premium_materials": has_premium_materials,
+                        "materials": {
+                            "basic": b,
+                            "standard": s,
+                            "premium": p
+                        }
+                    }
+                    planets.append(p)
+                data.append({
+                    "system": {
+                        "name": line.star_system,
+                        "address": line.system_address,
+                        "star_pos": line.star_pos,
+                        "is_green_system": is_green_system,
+                        "planets": planets
+                    }
+                })
+        self.timing.stopTimingExecution()
+        return {
+            "type": "green_systems",
+            "data": data
+        }
+
     def loadSystemCoordinates(self):
         coordinates = []
         for line in self.journals:
@@ -228,21 +316,45 @@ class ED:
                 if (len(line.star_pos) > 0):
                     coordinates.append(line.star_pos)
         return {
-            "event": line.event,
+            "type": "coordinates",
             "data": np.array(coordinates).T
+        }
+
+    def getTotalEarnings(self):
+        total_earnings = 0
+        for line in self.journals:
+            if (isinstance(line, SellExplorationData) or isinstance(line, MultiSellExplorationData)):
+                total_earnings += line.total_earnings 
+        print("Total earnings: {0:,} CR".format(total_earnings))
+        return {
+            "type": "total_earnings",
+            "data": total_earnings
         }
 
     #endregion
 
 class EDStats:
+    filter_types: List[str]
+
+    def __init__(self) -> None:
+        self.filter_types = [
+            "coordinates",
+            "green_systems",
+            "total_earnings"
+        ]
+
     # TODO: initData can contain anything not just coordinates.
     # Probably pass event type as well
-    def initData(self, eventData):
-
-
-        self.x = coordinates[0]
-        self.y = coordinates[1]
-        self.z = coordinates[2]
+    def initData(self, data):
+        if (data["type"] in self.filter_types):
+            if (data["type"] == "coordinates"):
+                self.x = data["data"][0]
+                self.y = data["data"][1]
+                self.z = data["data"][2]
+            elif (data["type"] == "green_systems"):
+                self.x = [m["system"]["star_pos"][0] for m in data["data"] if m["system"]["is_green_system"]]
+                self.y = [m["system"]["star_pos"][1] for m in data["data"] if m["system"]["is_green_system"]]
+                self.z = [m["system"]["star_pos"][2] for m in data["data"] if m["system"]["is_green_system"]]
 
     def initialize2DPlot(self):
         self.im = plt.imread("milky_way_ed_9000px.jpg")
@@ -290,13 +402,15 @@ if __name__ == "__main__":
     ed = ED()
     ed.parseArgs()
     ed.parseJournalsData()
-    eventData = ed.loadSystemCoordinates()
+    data = ed.loadSystemCoordinates()
+    # ed.getTotalEarnings()
     stats = EDStats()
-    stats.initData(eventData)
-    # stats.initialize2DPlot()
-    # stats.scatter2DData()
-    # ed.initialize3DPlot()
-    # ed.scatter3DData()
-    # stats.showPlot()
+    stats.initData(data)
+    stats.initialize2DPlot()
+    stats.scatter2DData()
+    # stats.initialize3DPlot()
+    # stats.scatter3DData()
+    # stats.savePlotToFile()
+    stats.showPlot()
 
 

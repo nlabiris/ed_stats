@@ -3,6 +3,21 @@ from typing import Any, Optional, List
 from helper import Helper
 
 
+class Material:
+    name: str
+    percent: float
+
+    def __init__(self, name: str, percent: float) -> None:
+        self.name = name
+        self.percent = percent
+
+    @staticmethod
+    def fromDict(obj: Any) -> 'Material':
+        assert isinstance(obj, dict)
+        name = Helper.fromString(obj.get("Name", ""))
+        percent = Helper.fromFloat(obj.get("Percent", 0))
+        return Material(name, percent)
+
 class AtmosphereComposition:
     name: str
     percent: float
@@ -103,7 +118,7 @@ class Scan:
     luminosity: str
     age_my: int
     landable: bool
-    materials: List[AtmosphereComposition]
+    materials: List[Material]
     composition: Composition
     atmosphere_composition: List[AtmosphereComposition]
     semi_major_axis: float
@@ -118,7 +133,7 @@ class Scan:
     was_discovered: bool
     was_mapped: bool
 
-    def __init__(self, timestamp: datetime, event: str, scan_type: str, body_name: str, body_id: int, parents: List[Parent], star_system: str, system_address: int, distance_from_arrival_ls: float, star_type: str, subclass: int, stellar_mass: float, tidal_lock: bool, terraform_state: str, planet_class: str, atmosphere: str, atmosphere_type: str, volcanism: str, mass_em: float, radius: float, absolute_magnitude: float, surface_gravity: float, surface_temperature: float, surface_pressure: float, luminosity: str, age_my: int, landable: bool, materials: List[AtmosphereComposition], composition: Composition, atmosphere_composition: List[AtmosphereComposition], semi_major_axis: float, eccentricity: float, orbital_inclination: float, periapsis: float, orbital_period: float, rotation_period: float, axial_tilt: float, rings: List[Ring], reserve_level: str, was_discovered: bool, was_mapped: bool) -> None:
+    def __init__(self, timestamp: datetime, event: str, scan_type: str, body_name: str, body_id: int, parents: List[Parent], star_system: str, system_address: int, distance_from_arrival_ls: float, star_type: str, subclass: int, stellar_mass: float, tidal_lock: bool, terraform_state: str, planet_class: str, atmosphere: str, atmosphere_type: str, volcanism: str, mass_em: float, radius: float, absolute_magnitude: float, surface_gravity: float, surface_temperature: float, surface_pressure: float, luminosity: str, age_my: int, landable: bool, materials: List[Material], composition: Composition, atmosphere_composition: List[AtmosphereComposition], semi_major_axis: float, eccentricity: float, orbital_inclination: float, periapsis: float, orbital_period: float, rotation_period: float, axial_tilt: float, rings: List[Ring], reserve_level: str, was_discovered: bool, was_mapped: bool) -> None:
         self.timestamp = timestamp
         self.event = event
         self.scan_type = scan_type
@@ -191,7 +206,7 @@ class Scan:
         luminosity = Helper.fromString(obj.get("Luminosity", ""))
         age_my = Helper.fromInteger(obj.get("Age_MY", 0))
         landable = Helper.fromBool(obj.get("Landable", False))
-        materials = Helper.fromList(AtmosphereComposition.fromDict, obj.get("Materials", []))
+        materials = Helper.fromList(Material.fromDict, obj.get("Materials", []))
         composition = Composition.fromDict(obj.get("Composition", {}))
         atmosphere_composition = Helper.fromList(AtmosphereComposition.fromDict, obj.get("AtmosphereComposition", []))
         semi_major_axis = Helper.fromFloat(obj.get("SemiMajorAxis", 0))

@@ -10,9 +10,10 @@
         "program": "${file}",
         "console": "integratedTerminal",
         "args": [
-            "--events", "FSDJump",
-            "--all-journals"
-            // "--journal-from", "2022-03-09"
+            "--events", "FSDJump, Scan",
+            //"--events", "SellExplorationData, MultiSellExplorationData",
+            //"--all-journals"
+            "--journal-from", "2022-03-12"
         ],
         "justMyCode": true
     }]
