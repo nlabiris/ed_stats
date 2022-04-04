@@ -10,10 +10,12 @@
         "program": "${file}",
         "console": "integratedTerminal",
         "args": [
-            "--events", "FSDJump, Scan",
+            "--events", "FSDJump, Synthesis",
             //"--events", "SellExplorationData, MultiSellExplorationData",
             //"--all-journals"
-            "--journal-from", "2022-03-12"
+            "--journal-from", "2022-03-12",
+            "--save-system-coordinates-to-csv",
+            "--save-events-to-csv"
         ],
         "justMyCode": true
     }]

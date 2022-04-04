@@ -62,6 +62,7 @@ from model.StartJump import StartJump
 from model.Statistics import Statistics
 from model.SupercruiseEntry import SupercruiseEntry
 from model.SupercruiseExit import SupercruiseExit
+from model.Synthesis import Synthesis
 from model.Touchdown import Touchdown
 from model.Undocked import Undocked
 from model.Music import Music
@@ -115,6 +116,9 @@ class ED:
         parser.add_argument("--events", help="Journal event types, separated by comma (,)")
         parser.add_argument("--journal-from", help="Journal timestamp from")
         parser.add_argument("--journal-to", help="Journal timestamp to. If ommited, assume current datetime")
+        parser.add_argument("--save-events-to-csv", help="Save events to CSV", action="store_true")
+        parser.add_argument("--save-events-to-json", help="Save events to JSON", action="store_true")
+        parser.add_argument("--save-system-coordinates-to-csv", help="Save system coordinates to CSV", action="store_true")
         parser.add_argument("--scan-type", help="For event type 'Scan' - Scan type can be Basic, Detailed, NavBeacon, NavBeaconDetail, AutoScan")
         parser.add_argument("--materials", help="For event type 'Scan' - Materials, separated by comma (,)")
         parser.add_argument("--landable", help="For event type 'Scan' - If the body is landable or not", action="store_true")
@@ -197,6 +201,7 @@ class ED:
             "Statistics": Statistics,
             "SupercruiseEntry": SupercruiseEntry,
             "SupercruiseExit": SupercruiseExit,
+            "Synthesis": Synthesis,
             "Touchdown": Touchdown,
             "Undocked": Undocked,
             "Music": Music
@@ -214,7 +219,7 @@ class ED:
         journal_file_names = self.filerJournalsByTimestamp()
         journals_data_lines = self.loadJournalLines(journal_file_names)
         self.journals = self.parseJournalLines(journals_data_lines)
-        self.timing.stopTimingExecution()
+        self.timing.stopTimingExecution("Parse journals")
 
     def filerJournalsByTimestamp(self):
         files = os.listdir(self.journals_path)
@@ -240,6 +245,10 @@ class ED:
                     line = json.loads(l)
                     if (not self.args.events or (line.get("event") in self.args.events)):
                         journals_data_lines.append(line)
+        if (self.args.save_events_to_csv):
+            self.saveEventsAsCSV(journals_data_lines)
+        if (self.args.save_events_to_json):
+            self.saveEventsAsJSON(journals_data_lines)
         return journals_data_lines
 
     def parseJournalLines(self, journals_data_lines):
@@ -303,21 +312,30 @@ class ED:
                         "planets": planets
                     }
                 })
-        self.timing.stopTimingExecution()
+        self.timing.stopTimingExecution("Green systems")
         return {
             "type": "green_systems",
             "data": data
         }
 
     def loadSystemCoordinates(self):
-        coordinates = []
+        data = []
         for line in self.journals:
             if (isinstance(line, FSDJump)):
                 if (len(line.star_pos) > 0):
-                    coordinates.append(line.star_pos)
+                    data.append({
+                        "timestamp": line.timestamp,
+                        "star_system": line.star_system,
+                        "jump_dist": line.jump_dist,
+                        "X": line.star_pos[0],
+                        "Y": line.star_pos[1],
+                        "Z": line.star_pos[2]
+                    })
+        if (self.args.save_system_coordinates_to_csv):
+            self.saveSystemCoordinatesAsCSV(data)
         return {
             "type": "coordinates",
-            "data": np.array(coordinates).T
+            "data": data
         }
 
     def getTotalEarnings(self):
@@ -330,6 +348,25 @@ class ED:
             "type": "total_earnings",
             "data": total_earnings
         }
+    
+    def saveSystemCoordinatesAsCSV(self, data):
+        print("Save system coordinates as CSV...")
+        Helper.saveAsCSV(data, ["timestamp", "star_system", "jump_dist", "X", "Y", "Z"], "coordinates.csv", ";")
+
+    def saveEventsAsJSON(self, data):
+        print("Save events as JSON...")
+        Helper.saveAsJSON(data)
+
+    def saveEventsAsCSV(self, data):
+        d = []
+        for line in data:
+            d.append({
+                "timestamp": line["timestamp"],
+                "event": line["event"],
+                "data": line
+            })
+        print("Save events as CSV...")
+        Helper.saveAsCSV(d, ["timestamp", "event", "data"], "events.csv", "##")
 
     #endregion
 
@@ -348,9 +385,9 @@ class EDStats:
     def initData(self, data):
         if (data["type"] in self.filter_types):
             if (data["type"] == "coordinates"):
-                self.x = data["data"][0]
-                self.y = data["data"][1]
-                self.z = data["data"][2]
+                self.x = [d["X"] for d in data["data"]]
+                self.y = [d["Y"] for d in data["data"]]
+                self.z = [d["Z"] for d in data["data"]]
             elif (data["type"] == "green_systems"):
                 self.x = [m["system"]["star_pos"][0] for m in data["data"] if m["system"]["is_green_system"]]
                 self.y = [m["system"]["star_pos"][1] for m in data["data"] if m["system"]["is_green_system"]]
@@ -400,17 +437,19 @@ if __name__ == "__main__":
     # journal_date_to = datetime(2023, 6, 1)
 
     ed = ED()
+    ed.timing.startTimingExecution()
     ed.parseArgs()
     ed.parseJournalsData()
     data = ed.loadSystemCoordinates()
+    ed.timing.stopTimingExecution("Main")
     # ed.getTotalEarnings()
-    stats = EDStats()
-    stats.initData(data)
-    stats.initialize2DPlot()
-    stats.scatter2DData()
+    # stats = EDStats()
+    # stats.initData(data)
+    # stats.initialize2DPlot()
+    # stats.scatter2DData()
     # stats.initialize3DPlot()
     # stats.scatter3DData()
     # stats.savePlotToFile()
-    stats.showPlot()
+    # stats.showPlot()
 
 

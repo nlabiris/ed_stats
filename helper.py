@@ -1,4 +1,4 @@
-import time
+import json
 import dateutil.parser
 from typing import List, Any, TypeVar, Callable, Type, cast
 from datetime import datetime
@@ -53,3 +53,25 @@ class Helper:
             except:
                 pass
         assert False
+
+    def saveAsJSON(data, filename):
+        '''
+        Save data as JSON
+        '''
+
+        with open(filename, "w") as f:
+            f.write(json.dumps(data))
+
+    # TODO: Need the column names which will be each attribute of the dictionary data
+    def saveAsCSV(data, columns, filename, separator=","):
+        '''
+        Save data as CSV
+        '''
+
+        with open(filename, "w") as f:
+            f.write(separator.join(map(str, columns)) + "\n")
+            for row in data:
+                line = []
+                for column in columns:
+                    line.append(row[column])
+                f.write(separator.join(map(str, line)) + "\n")

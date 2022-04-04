@@ -8,7 +8,7 @@ class Timing:
     def startTimingExecution(self):
         self.start_time = time.time()
 
-    def stopTimingExecution(self):
+    def stopTimingExecution(self, prefix="###"):
         self.stop_time = time.time()
         elapsed_seconds = self.stop_time - self.start_time
 
@@ -16,5 +16,5 @@ class Timing:
         elapsed_seconds = elapsed_seconds % 60
         hours = mins // 60
         mins = mins % 60
-        print("Time elapsed: {0} hour(s), {1} minute(s), {2} second(s)".format(int(hours), int(mins), elapsed_seconds))
+        print("{0} - Time elapsed: {1} hour(s), {2} minute(s), {3} second(s)".format(prefix, int(hours), int(mins), elapsed_seconds))
 
